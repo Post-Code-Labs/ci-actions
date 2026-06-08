@@ -1,18 +1,13 @@
 name: dev-config auth
 description: >
-  Configure git so pnpm/npm can install the private dev-config dependency, using
-  an ephemeral per-job git config so nothing persists on self-hosted runners.
+  Configure git so pnpm/npm can install the private Post-Code-Labs/dev-config
+  dependency, using an ephemeral per-job git config so nothing persists on
+  self-hosted runners.
 
 inputs:
   token:
-    description: Token with read access to the private dev-config repository.
+    description: Token with read access to Post-Code-Labs/dev-config.
     required: true
-  owner:
-    description: >
-      Owner whose git@github.com:<owner>/ remotes are rewritten to authenticated
-      https. Match your package.json dependency spec.
-    required: false
-    default: Post-Code-Labs
 
 runs:
   using: composite
@@ -20,5 +15,4 @@ runs:
     - shell: bash
       env:
         DEV_CONFIG_TOKEN: ${{ inputs.token }}
-        DEV_CONFIG_OWNER: ${{ inputs.owner }}
       run: bash "$GITHUB_ACTION_PATH/auth.sh"
