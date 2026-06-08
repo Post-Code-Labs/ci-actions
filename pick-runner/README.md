@@ -1,9 +1,9 @@
 # pick-runner
 
 Selects where a heavy job runs: prefers an idle, online self-hosted runner in
-the org's homelab runner group, and falls back to GitHub-hosted cloud otherwise.
-Use it in a small upfront job and feed its `runs_on` output into a later job's
-`runs-on` via `fromJSON`.
+the named org runner group, and falls back to GitHub-hosted cloud if that group
+is absent or has no idle runner. Use it in a small upfront job and feed its
+`runs_on` output into a later job's `runs-on` via `fromJSON`.
 
 ## Usage
 
@@ -17,6 +17,7 @@ jobs:
       - id: pick
         uses: Post-Code-Labs/ci-actions/pick-runner@<sha> # vX
         with:
+          alternate-runner: homelab@121
           runner-status-token: ${{ secrets.RUNNER_STATUS_TOKEN }}
 
   build:
@@ -25,10 +26,11 @@ jobs:
     steps: ...
 ```
 
-| Input                 | Required | Default        |
-| --------------------- | -------- | -------------- |
-| `runner-status-token` | no       | `''`           |
-| `group-name`          | no       | `homelab@121`  |
+| Input                 | Required | Default          |
+| --------------------- | -------- | ---------------- |
+| `alternate-runner`    | yes      | —                |
+| `org`                 | no       | `Post-Code-Labs` |
+| `runner-status-token` | no       | `''`             |
 
 With no `runner-status-token` (fork PRs, Dependabot), the probe falls back to
 cloud, so untrusted code never lands on self-hosted runners.
