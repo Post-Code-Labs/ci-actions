@@ -26,10 +26,10 @@ jobs:
     steps: ...
 ```
 
-| Input                 | Required | Default          |
-| --------------------- | -------- | ---------------- |
-| `alternate-runner`    | yes      | —    |
-| `runner-status-token` | no       | `''` |
+| Input                 | Required | Default |
+| --------------------- | -------- | ------- |
+| `alternate-runner`    | yes      | —       |
+| `runner-status-token` | no       | `''`    |
 
 With no `runner-status-token` (fork PRs, Dependabot), the probe falls back to
 cloud, so untrusted code never lands on self-hosted runners.
