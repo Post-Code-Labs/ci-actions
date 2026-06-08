@@ -1,0 +1,39 @@
+name: Pick runner
+description: >
+  Select where a heavy job runs: prefer an idle, online self-hosted runner in
+  the given org runner group; fall back to GitHub-hosted cloud if that group is
+  absent or has no idle runner. GitHub Actions has no native "use self-hosted if
+  available, else cloud" switch — a job pinned to an offline runner just queues
+  until timeout — so a job uses this action up front and feeds the `runs_on`
+  output into its `runs-on` via fromJSON.
+
+inputs:
+  alternate-runner:
+    description: >
+      Name of the org runner group to probe for an idle, online runner. The job
+      falls back to cloud if the group is absent or has no idle runner.
+    required: true
+  runner-status-token:
+    description: >
+      Fine-grained PAT with org "Self-hosted runners: read". Empty on fork PRs
+      and Dependabot runs (secrets aren't exposed there) — the probe then falls
+      back to cloud, so untrusted code never lands on self-hosted runners.
+    required: false
+    default: ''
+
+outputs:
+  runs_on:
+    description: 'JSON value for `runs-on`: the string "ubuntu-latest" or a runner-group object.'
+    value: ${{ steps.pick.outputs.runs_on }}
+
+runs:
+  using: composite
+  steps:
+    - name: Probe runner group
+      id: pick
+      shell: bash
+      env:
+        RUNNER_STATUS_TOKEN: ${{ inputs.runner-status-token }}
+        ORG: ${{ github.repository_owner }}
+        GROUP_NAME: ${{ inputs.alternate-runner }}
+      run: bash "$GITHUB_ACTION_PATH/pick-runner.sh"
