@@ -13,10 +13,6 @@ inputs:
       Name of the org runner group to probe for an idle, online runner. The job
       falls back to cloud if the group is absent or has no idle runner.
     required: true
-  org:
-    description: Organization that owns the runner group.
-    required: false
-    default: Post-Code-Labs
   runner-status-token:
     description: >
       Fine-grained PAT with org "Self-hosted runners: read". Empty on fork PRs
@@ -38,6 +34,6 @@ runs:
       shell: bash
       env:
         RUNNER_STATUS_TOKEN: ${{ inputs.runner-status-token }}
-        ORG: ${{ inputs.org }}
+        ORG: ${{ github.repository_owner }}
         GROUP_NAME: ${{ inputs.alternate-runner }}
       run: bash "$GITHUB_ACTION_PATH/pick-runner.sh"

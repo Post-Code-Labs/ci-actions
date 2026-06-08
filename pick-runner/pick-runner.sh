@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Provided by the action's env: block. Assigned here so the contract is explicit
 # and shellcheck doesn't treat them as undefined.
-ORG="${ORG:?org input is required}"
+ORG="${ORG:?ORG is not set}"
 GROUP_NAME="${GROUP_NAME:?alternate-runner input is required}"
 RUNNER_STATUS_TOKEN="${RUNNER_STATUS_TOKEN:-}"
 : "${GITHUB_OUTPUT:?GITHUB_OUTPUT is not set}"
