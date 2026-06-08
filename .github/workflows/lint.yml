@@ -25,7 +25,7 @@ jobs:
       PRETTIER_VERSION: 3.8.3
     steps:
       - name: Check out repository
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Shellcheck
         run: git ls-files '*.sh' | xargs -r shellcheck
