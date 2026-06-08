@@ -19,7 +19,7 @@ inputs:
       and Dependabot runs (secrets aren't exposed there) — the probe then falls
       back to cloud, so untrusted code never lands on self-hosted runners.
     required: false
-    default: ''
+    default: ""
 
 outputs:
   runs_on:
