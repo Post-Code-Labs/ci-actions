@@ -17,5 +17,5 @@ concurrently; a per-job `dest` avoids that.
 | --------- | -------- | ------------------------------- |
 | `version` | no       | package.json's `packageManager` |
 
-The inner `pnpm/action-setup` pin is bumped manually; Dependabot does not scan
-nested composite-action files.
+The inner `pnpm/action-setup` pin is kept current by Dependabot, which lists
+this directory explicitly in `.github/dependabot.yml`.
