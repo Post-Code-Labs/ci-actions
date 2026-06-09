@@ -6,6 +6,7 @@ updates:
     directories:
       - "/"
       - "/setup-pnpm"
+      - "/setup-uv"
     schedule:
       interval: weekly
     groups:

@@ -5,6 +5,11 @@ Wraps `pnpm/action-setup`, installing pnpm into a per-job directory
 between jobs, so the default shared `~/setup-pnpm` gets clobbered when jobs run
 concurrently; a per-job `dest` avoids that.
 
+Always use this instead of `pnpm/action-setup` directly on shared self-hosted
+runners. The default shared `~/setup-pnpm` surfaces as a `[MODULE_NOT_FOUND]`
+for `~/setup-pnpm/.../pnpm/dist/worker.js` mid-install when another job
+reinstalls the pnpm CLI underneath a running one.
+
 ## Usage
 
 ```yaml

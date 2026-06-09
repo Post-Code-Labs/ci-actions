@@ -1,0 +1,43 @@
+name: Set up uv
+description: >
+  Wrap astral-sh/setup-uv with a per-job cache directory under RUNNER_TEMP, so
+  concurrent Python jobs on a shared self-hosted runner never extract the same
+  package into the same path in uv's global cache. enable-cache still restores a
+  warm cache from the GitHub Actions cache service, so the per-job dir starts
+  warm and nothing accumulates in $HOME.
+
+inputs:
+  version:
+    description: uv version to install. Defaults to the project/pyproject version or latest.
+    required: false
+    default: ""
+  python-version:
+    description: Python version for uv to install and pin (sets UV_PYTHON). Optional.
+    required: false
+    default: ""
+  enable-cache:
+    description: >
+      Save/restore the uv cache via the GitHub Actions cache service. The cache
+      is isolated per job via cache-local-path regardless of this value.
+    required: false
+    default: "true"
+  cache-suffix:
+    description: >
+      Suffix appended to the cache key. Set a distinct value per subproject in a
+      monorepo (e.g. models, ingestion) to keep their caches independent.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      with:
+        version: ${{ inputs.version }}
+        python-version: ${{ inputs.python-version }}
+        enable-cache: ${{ inputs.enable-cache }}
+        cache-suffix: ${{ inputs.cache-suffix }}
+        # Per-job cache dir under RUNNER_TEMP: unique per job and wiped after the
+        # job, so concurrent jobs on a shared self-hosted host never extract into
+        # the same path. setup-uv exports this as UV_CACHE_DIR for later steps.
+        cache-local-path: ${{ runner.temp }}/uv-cache
