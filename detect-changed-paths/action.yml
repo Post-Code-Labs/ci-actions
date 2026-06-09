@@ -1,0 +1,71 @@
+name: detect-changed-paths
+description: >
+  Detect which caller-defined filters a push/PR touched, using a single git diff
+  and git glob pathspecs. Emits one JSON `changes` output (filter name ->
+  "true"/"false") because composite actions cannot declare dynamically-named
+  outputs. When the base commit is unavailable (first push, force-push with a
+  vanished base, or a shallow checkout) it treats every path as changed, matching
+  the inline script it replaces. Requires the calling job to check out with
+  fetch-depth: 0.
+
+inputs:
+  filters:
+    description: >
+      JSON object mapping filter name -> array of git :(glob) pathspec patterns,
+      e.g. {"quality":["src/**","package.json"],"docs":["**/*.md","!**/CHANGELOG.md"]}.
+      These are git globs, NOT picomatch: no brace expansion; a leading "!" is an
+      exclude; a filter with only excludes is rejected. Filter names must be
+      [A-Za-z_][A-Za-z0-9_]* for fromJSON(...).<name> dot access in the caller.
+    required: true
+  base:
+    description: Explicit base ref/SHA. Overrides the event-derived base when set.
+    required: false
+    default: ""
+  head:
+    description: Explicit head ref/SHA. Overrides the event-derived head when set.
+    required: false
+    default: ""
+  working-directory:
+    description: Directory to run git in. Defaults to the workspace root.
+    required: false
+    default: "."
+  list-files:
+    description: 'If "json", also populate the `files` output. "none" (default) skips it.'
+    required: false
+    default: "none"
+
+outputs:
+  changes:
+    description: JSON object, filter name -> "true"/"false".
+    value: ${{ steps.detect.outputs.changes }}
+  any:
+    description: '"true" if any filter matched, else "false".'
+    value: ${{ steps.detect.outputs.any }}
+  matched:
+    description: JSON array of the filter names that matched.
+    value: ${{ steps.detect.outputs.matched }}
+  counts:
+    description: JSON object, filter name -> number of matched files.
+    value: ${{ steps.detect.outputs.counts }}
+  files:
+    description: JSON object, filter name -> array of matched files (only when list-files=json).
+    value: ${{ steps.detect.outputs.files }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect changed paths
+      id: detect
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        FILTERS: ${{ inputs.filters }}
+        IN_BASE: ${{ inputs.base }}
+        IN_HEAD: ${{ inputs.head }}
+        LIST_FILES: ${{ inputs.list-files }}
+        EVENT: ${{ github.event_name }}
+        PR_BASE: ${{ github.event.pull_request.base.sha }}
+        PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        PUSH_BEFORE: ${{ github.event.before }}
+        PUSH_AFTER: ${{ github.sha }}
+      run: bash "$GITHUB_ACTION_PATH/detect.sh"
