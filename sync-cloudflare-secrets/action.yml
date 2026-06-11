@@ -1,0 +1,73 @@
+name: Sync Cloudflare secrets
+description: >
+  Re-assert Cloudflare Worker or Pages secrets from the workflow environment on
+  every deploy. Cloudflare secrets are write-only — wrangler and OpenTofu/Terraform
+  cannot read them back — so a one-time `secret put` is invisible to IaC and
+  silently drifts from the Actions secret store. This pushes each named secret
+  from an env var via `wrangler [pages] secret put` over stdin, refusing to blank
+  a required secret, skipping absent optional ones, and retrying transient
+  failures under a per-attempt timeout.
+
+inputs:
+  target:
+    description: >
+      "pages" or "worker". Selects `wrangler pages secret put --project-name` vs
+      `wrangler secret put --name/--env`.
+    required: true
+  secrets:
+    description: >
+      Newline-separated secret map, one entry per line:
+        CF_NAME            push env var CF_NAME as secret CF_NAME (required)
+        CF_NAME=ENV_VAR    push env var ENV_VAR as secret CF_NAME (required; rename)
+        ?CF_NAME[=ENV_VAR] optional — skipped when the env var is empty/unset
+      Lines that are blank or start with "#" are ignored. Names must match
+      [A-Za-z_][A-Za-z0-9_]*. Values are read from the step environment (set them
+      via the job's env:), never inline, so special characters are safe and stay
+      masked. A required entry whose env var is empty fails the action rather than
+      wiping the live secret.
+    required: true
+  project-name:
+    description: Cloudflare Pages project name (target=pages). Maps to --project-name. Required when target=pages.
+    required: false
+    default: ""
+  name:
+    description: Worker name (target=worker). Maps to --name. Omit to use the name from wrangler config in working-directory.
+    required: false
+    default: ""
+  environment:
+    description: Worker environment (target=worker). Maps to --env. Optional.
+    required: false
+    default: ""
+  working-directory:
+    description: Directory wrangler runs in (where it resolves config for target=worker). Defaults to the workspace root.
+    required: false
+    default: "."
+  wrangler-version:
+    description: Wrangler version run via npx, pinned for reproducibility.
+    required: false
+    default: "4.97.0"
+  retries:
+    description: Attempts per secret on transient failure (network, 5xx, a timed-out hang).
+    required: false
+    default: "3"
+  timeout-seconds:
+    description: Per-attempt timeout guarding a hung wrangler invocation.
+    required: false
+    default: "60"
+
+runs:
+  using: composite
+  steps:
+    - name: Sync Cloudflare secrets
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        TARGET: ${{ inputs.target }}
+        SECRETS_MAP: ${{ inputs.secrets }}
+        PROJECT_NAME: ${{ inputs.project-name }}
+        WORKER_NAME: ${{ inputs.name }}
+        WORKER_ENV: ${{ inputs.environment }}
+        WRANGLER_VERSION: ${{ inputs.wrangler-version }}
+        RETRIES: ${{ inputs.retries }}
+        TIMEOUT_SECONDS: ${{ inputs.timeout-seconds }}
+      run: bash "$GITHUB_ACTION_PATH/sync.sh"

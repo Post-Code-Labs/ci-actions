@@ -39,7 +39,7 @@ jobs:
         run: npx --yes "prettier@${PRETTIER_VERSION}" --check .
 
   test:
-    name: detect-changed-paths tests
+    name: action tests
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -48,3 +48,6 @@ jobs:
 
       - name: Run detect-changed-paths tests
         run: bash detect-changed-paths/tests/run.sh
+
+      - name: Run sync-cloudflare-secrets tests
+        run: bash sync-cloudflare-secrets/tests/run.sh
