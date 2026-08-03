@@ -206,19 +206,66 @@ assert_eq 0 "$RC" "10: exit code"
 assert_eq false "$(field changes '.code')" "10: base-branch-only change is not counted as a PR change"
 assert_eq true "$(field changes '.docs')" "10: PR's own docs change still counted"
 
-# --- 11: no common ancestor (unrelated histories) -> all-changed fallback,
-# not a hard failure (a bare three-dot diff errors out here).
+# --- 11: PR with no common ancestor (unrelated histories) falls back to a
+# two-dot diff, not `git ls-files` — a bare three-dot diff hard-fails without
+# a merge-base, and ls-files only reflects the checked-out (head) tree, which
+# would silently miss a file that exists only in base (a deletion).
 reset
 REPO="$(new_repo)"
-head="$(git -C "$REPO" rev-parse HEAD)"
+mkdir -p "$REPO/src"
+printf 'only in base\n' >"$REPO/src/onlyinbase.ts"
+git -C "$REPO" add -A
+git -C "$REPO" -c commit.gpgsign=false commit -qm "base has src/onlyinbase.ts"
+base="$(git -C "$REPO" rev-parse HEAD)"
 git -C "$REPO" checkout -q --orphan orphan
-base="$(commit_files "$REPO" orphan src/orphan.ts)"
-EVENT=push PUSH_BEFORE="$base" PUSH_AFTER="$head"
+git -C "$REPO" rm -rf -q --cached .
+find "$REPO" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+# Distinct content from onlyinbase.ts above — identical content would trigger
+# git's rename detection (100% similarity), collapsing this add+delete pair
+# into a perceived rename and defeating the point of the test.
+mkdir -p "$REPO/src"
+printf 'only in head, unrelated content\n' >"$REPO/src/head-only.ts"
+git -C "$REPO" add -A
+git -C "$REPO" -c commit.gpgsign=false commit -qm "unrelated head history"
+head="$(git -C "$REPO" rev-parse HEAD)"
+EVENT=pull_request PR_BASE="$base" PR_HEAD="$head"
 FILTERS='{"code":["src/**"]}'
 detect
 assert_eq 0 "$RC" "11: exit code"
-assert_contains "$(cat "$LOG")" "No common ancestor" "11: fallback warning"
-assert_eq true "$(field changes '.code')" "11: tracked src matched in fallback"
+assert_contains "$(cat "$LOG")" "No common ancestor" "11: no-common-ancestor warning"
+assert_eq true "$(field changes '.code')" "11: base-only file's removal is still detected"
+assert_eq 2 "$(field counts '.code')" "11: removed base-only file + added head-only file both counted"
+
+# --- 12: push (force-push/reset) keeps a two-dot diff even though base is
+# not an ancestor of head — regression test for the reverse of #10. A
+# three-dot diff against merge-base(before, after) would silently drop
+# src/base.ts (its content in `after` matches the merge-base, having been
+# reverted) and src/old-feature.ts (removed, never existed at the merge-base
+# either) — both real differences relative to what was last validated.
+reset
+REPO="$(new_repo)"
+mkdir -p "$REPO/src"
+printf 'a\n' >"$REPO/src/base.ts"
+git -C "$REPO" add -A
+git -C "$REPO" -c commit.gpgsign=false commit -qm "fork: src/base.ts=a"
+fork="$(git -C "$REPO" rev-parse HEAD)"
+printf 'b\n' >"$REPO/src/base.ts"
+printf 'x\n' >"$REPO/src/old-feature.ts"
+git -C "$REPO" add -A
+git -C "$REPO" -c commit.gpgsign=false commit -qm "old path: modify base.ts, add old-feature.ts"
+before="$(git -C "$REPO" rev-parse HEAD)"
+git -C "$REPO" checkout -q "$fork"
+git -C "$REPO" checkout -q -b forcepushed
+printf 'y\n' >"$REPO/src/new-feature.ts"
+git -C "$REPO" add -A
+git -C "$REPO" -c commit.gpgsign=false commit -qm "force-pushed path: add new-feature.ts"
+after="$(git -C "$REPO" rev-parse HEAD)"
+EVENT=push PUSH_BEFORE="$before" PUSH_AFTER="$after"
+FILTERS='{"code":["src/**"]}'
+detect
+assert_eq 0 "$RC" "12: exit code"
+assert_eq true "$(field changes '.code')" "12: force-push diff still detected"
+assert_eq 3 "$(field counts '.code')" "12: reverted base.ts + removed old-feature.ts + added new-feature.ts all counted"
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

@@ -81,17 +81,28 @@ not identical to, picomatch-style globs used by other path-filter actions:
 
 `base`/`head` inputs win when set. Otherwise: pull requests compare
 `pull_request.base.sha`…`pull_request.head.sha`; pushes compare
-`event.before`…`sha`. Either way it's a three-dot `git diff <base>...<head>` —
-against `merge-base(base, head)`, not `base` itself — so a PR branch that
-hasn't been rebased onto a moving base doesn't pick up the base branch's own
-commits since the fork point as if the PR had touched them. For a push (or any
-case where `base` is already an ancestor of `head`) this is identical to a
-two-dot diff; it only differs when the two have diverged.
+`event.before`…`sha`.
+
+Pull requests (only) get a three-dot `git diff <base>...<head>` — against
+`merge-base(base, head)`, not `base` itself — so a PR branch that hasn't been
+rebased onto a moving base doesn't pick up the base branch's own commits since
+the fork point as if the PR had touched them. If base and head share no common
+ancestor (unrelated histories), it falls back to a two-dot diff for that
+comparison instead of failing outright.
+
+Pushes, and any comparison using the explicit `base`/`head` inputs, always use
+a two-dot diff against `base` literally. A force-push or reset can leave
+`base` outside `head`'s ancestry, and two-dot is the only mode that still
+surfaces a file that was reverted or removed relative to `base` in that case —
+a three-dot diff would compare against a merge-base that may itself already
+lack the file, making the change invisible.
 
 When the base commit is unavailable (first push, force-push with a vanished
-base, or a shallow checkout) or shares no common ancestor with head (unrelated
-histories), it emits a warning and treats every tracked path as changed — so
-checkout with `fetch-depth: 0`.
+base, or a shallow checkout), it emits a warning and treats every tracked path
+as changed via `git ls-files` — so checkout with `fetch-depth: 0`. Note this
+fallback only reflects the checked-out tree, so it can't see a path that
+existed solely in `base`; that's why the unrelated-histories case above falls
+back to a two-dot diff instead of this one.
 
 > `jq` and `git` are required (both present on `ubuntu-latest`, where the
 > `changes` job typically runs).

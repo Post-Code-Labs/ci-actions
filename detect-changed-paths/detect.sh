@@ -15,13 +15,18 @@ PUSH_AFTER="${PUSH_AFTER:-}"
 : "${GITHUB_OUTPUT:?GITHUB_OUTPUT is not set}"
 
 # Resolve base/head. Explicit inputs win; otherwise derive from the event,
-# mirroring the inline script this action replaces.
+# mirroring the inline script this action replaces. is_pr tracks whether this
+# comparison is an actual event-derived pull_request diff, since that's the
+# only case that gets a three-dot diff below — an explicit override is kept
+# out even if the caller happens to be reacting to a pull_request event.
+is_pr=0
 if [ -n "$IN_BASE" ] || [ -n "$IN_HEAD" ]; then
   base="$IN_BASE"
   head="$IN_HEAD"
 elif [ "$EVENT" = "pull_request" ] || [ "$EVENT" = "pull_request_target" ]; then
   base="$PR_BASE"
   head="$PR_HEAD"
+  is_pr=1
 else
   base="$PUSH_BEFORE"
   head="$PUSH_AFTER"
@@ -35,12 +40,28 @@ if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
   || ! git rev-parse -q --verify "$base^{commit}" >/dev/null 2>&1; then
   echo "::warning title=detect-changed-paths::Base commit unavailable — treating all paths as changed. Ensure the job checks out with fetch-depth: 0."
   all_changed=1
-elif ! git merge-base "$base" "$head" >/dev/null 2>&1; then
-  # No common ancestor (unrelated histories) — three-dot diff below would hard-fail.
-  echo "::warning title=detect-changed-paths::No common ancestor between base and head — treating all paths as changed."
-  all_changed=1
 fi
-echo "Comparing base=${base:-<none>} head=$head (event=${EVENT:-<none>}, all_changed=$all_changed)."
+
+# Pull requests: three-dot diff against merge-base(base, head), so a PR
+# branch that hasn't been rebased onto a moving base doesn't pick up the
+# base branch's own commits since the fork point as if the PR itself had
+# touched them. Everything else — pushes and explicit base/head overrides —
+# keeps the original two-dot diff against base literally: a push's base can
+# end up outside head's ancestry after a force-push or reset, and two-dot is
+# the only mode that still surfaces a file removed (or reverted) relative to
+# base in that case. Three-dot needs a common ancestor to diff against at
+# all, and the all-changed fallback above only lists the checked-out tree —
+# neither can see a base-only deletion, so a PR with no common ancestor also
+# falls back to two-dot here rather than either of those.
+use_three_dot=0
+if [ "$all_changed" -eq 0 ] && [ "$is_pr" -eq 1 ]; then
+  if git merge-base "$base" "$head" >/dev/null 2>&1; then
+    use_three_dot=1
+  else
+    echo "::warning title=detect-changed-paths::No common ancestor between base and head — using a two-dot diff instead of three-dot."
+  fi
+fi
+echo "Comparing base=${base:-<none>} head=$head (event=${EVENT:-<none>}, all_changed=$all_changed, three_dot=$use_three_dot)."
 
 # The filters input must be a non-empty JSON object: name -> array of patterns.
 if ! jq -e 'type == "object" and (keys | length > 0)' >/dev/null 2>&1 <<<"$FILTERS"; then
@@ -78,12 +99,10 @@ while IFS= read -r name; do
 
   if [ "$all_changed" -eq 1 ]; then
     out="$(git ls-files -- "${pathspecs[@]}")"
-  else
-    # Three-dot: diff against merge-base(base, head), not base itself. A PR
-    # branch that hasn't been rebased/updated otherwise picks up every file
-    # changed on the base branch since the branch forked, as if the PR itself
-    # had touched them.
+  elif [ "$use_three_dot" -eq 1 ]; then
     out="$(git diff --name-only "$base...$head" -- "${pathspecs[@]}")"
+  else
+    out="$(git diff --name-only "$base" "$head" -- "${pathspecs[@]}")"
   fi
 
   if [ -n "$out" ]; then
