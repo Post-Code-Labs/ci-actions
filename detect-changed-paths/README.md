@@ -81,10 +81,17 @@ not identical to, picomatch-style globs used by other path-filter actions:
 
 `base`/`head` inputs win when set. Otherwise: pull requests compare
 `pull_request.base.sha`…`pull_request.head.sha`; pushes compare
-`event.before`…`sha` (two-dot `git diff <base> <head>`). When the base commit is
-unavailable (first push, force-push with a vanished base, or a shallow checkout)
-it emits a warning and treats every tracked path as changed — so checkout with
-`fetch-depth: 0`.
+`event.before`…`sha`. Either way it's a three-dot `git diff <base>...<head>` —
+against `merge-base(base, head)`, not `base` itself — so a PR branch that
+hasn't been rebased onto a moving base doesn't pick up the base branch's own
+commits since the fork point as if the PR had touched them. For a push (or any
+case where `base` is already an ancestor of `head`) this is identical to a
+two-dot diff; it only differs when the two have diverged.
+
+When the base commit is unavailable (first push, force-push with a vanished
+base, or a shallow checkout) or shares no common ancestor with head (unrelated
+histories), it emits a warning and treats every tracked path as changed — so
+checkout with `fetch-depth: 0`.
 
 > `jq` and `git` are required (both present on `ubuntu-latest`, where the
 > `changes` job typically runs).

@@ -35,6 +35,10 @@ if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
   || ! git rev-parse -q --verify "$base^{commit}" >/dev/null 2>&1; then
   echo "::warning title=detect-changed-paths::Base commit unavailable — treating all paths as changed. Ensure the job checks out with fetch-depth: 0."
   all_changed=1
+elif ! git merge-base "$base" "$head" >/dev/null 2>&1; then
+  # No common ancestor (unrelated histories) — three-dot diff below would hard-fail.
+  echo "::warning title=detect-changed-paths::No common ancestor between base and head — treating all paths as changed."
+  all_changed=1
 fi
 echo "Comparing base=${base:-<none>} head=$head (event=${EVENT:-<none>}, all_changed=$all_changed)."
 
@@ -75,7 +79,11 @@ while IFS= read -r name; do
   if [ "$all_changed" -eq 1 ]; then
     out="$(git ls-files -- "${pathspecs[@]}")"
   else
-    out="$(git diff --name-only "$base" "$head" -- "${pathspecs[@]}")"
+    # Three-dot: diff against merge-base(base, head), not base itself. A PR
+    # branch that hasn't been rebased/updated otherwise picks up every file
+    # changed on the base branch since the branch forked, as if the PR itself
+    # had touched them.
+    out="$(git diff --name-only "$base...$head" -- "${pathspecs[@]}")"
   fi
 
   if [ -n "$out" ]; then

@@ -189,5 +189,36 @@ assert_eq 0 "$RC" "9: exit code"
 assert_eq true "$(field changes '.prettier')" "9: prettier runs on docs change"
 assert_eq false "$(field changes '.webapp')" "9: webapp skipped on docs change"
 
+# --- 10: pull_request diff uses merge-base, not literal base (stale, un-rebased
+# branch) — regression test for a real PR that had forked before several base
+# commits landed and, under a two-dot diff, showed those base-only commits'
+# files as if the PR itself had touched them.
+reset
+REPO="$(new_repo)"
+fork="$(git -C "$REPO" rev-parse HEAD)"
+base="$(commit_files "$REPO" "base moves on after the fork" src/mainonly.ts)"
+git -C "$REPO" checkout -q "$fork"
+head="$(commit_files "$REPO" "PR's own docs-only change" docs/notes.md)"
+EVENT=pull_request PR_BASE="$base" PR_HEAD="$head"
+FILTERS='{"code":["src/**"],"docs":["**/*.md"]}'
+detect
+assert_eq 0 "$RC" "10: exit code"
+assert_eq false "$(field changes '.code')" "10: base-branch-only change is not counted as a PR change"
+assert_eq true "$(field changes '.docs')" "10: PR's own docs change still counted"
+
+# --- 11: no common ancestor (unrelated histories) -> all-changed fallback,
+# not a hard failure (a bare three-dot diff errors out here).
+reset
+REPO="$(new_repo)"
+head="$(git -C "$REPO" rev-parse HEAD)"
+git -C "$REPO" checkout -q --orphan orphan
+base="$(commit_files "$REPO" orphan src/orphan.ts)"
+EVENT=push PUSH_BEFORE="$base" PUSH_AFTER="$head"
+FILTERS='{"code":["src/**"]}'
+detect
+assert_eq 0 "$RC" "11: exit code"
+assert_contains "$(cat "$LOG")" "No common ancestor" "11: fallback warning"
+assert_eq true "$(field changes '.code')" "11: tracked src matched in fallback"
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
